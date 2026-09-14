@@ -1,3 +1,9 @@
+# The future of GokonSoftworks, supporting Team Ninja and Gust games for modding
+
+More games are planned to be supported. For example, I may support the Dead or Alive community for modding. I've looked into the formats those games use, I could easily add them as supported games along with games from Gust like Atelier. I want GokonSoftworks to be the true foundation of all Koei Tecmo games for modding.
+
+Also, the next update of GokonSoftworks will resolve an issue I was informed of. Some subcontainers have evaded detection for DW8E during the unpacking phase, meaning some subs are not unpacked and retain the .bin extension. So, the next update will add the variations of the signatureless subcontainers I missed. Do be aware that that will make DW8E unpack with even more files than it currently does.
+
 # Version 3.0 info
 
 Version 3.0 is very different from previous versions. it's something i've worked on separately for months (mainly rewriting the heavy logic in C, that was time consuming). Aldnoah Engine is now GokonSoftworks. It has new code (Python and C), new GUI, new mod manager, etc. Scroll to release notes for more details and for GUI example images of the toolkit
