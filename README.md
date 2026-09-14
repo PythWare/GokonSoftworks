@@ -4,6 +4,8 @@ More games are planned to be supported. For example, I may support the Dead or A
 
 Also, the next update of GokonSoftworks will resolve an issue I was informed of. Some subcontainers have evaded detection for DW8E during the unpacking phase, meaning some subs are not unpacked and retain the .bin extension. So, the next update will add the variations of the signatureless subcontainers I missed. Do be aware that that will make DW8E unpack with even more files than it currently does.
 
+Further, I may fully convert GokonSoftworks to C. Atm the majority of the toolkit is written in C, with Python predominantly handling the GUI and some other small things. I can recreate the GUI in C. The real benefit of GokonSoftworks going full C is that it removes Python and Pillow as requirements to use the toolkit, you'd pretty much just download a standalone executable if I go full C, 0 dependencies while still retaining my rad GUI designs.
+
 # Version 3.0 info
 
 Version 3.0 is very different from previous versions. it's something i've worked on separately for months (mainly rewriting the heavy logic in C, that was time consuming). Aldnoah Engine is now GokonSoftworks. It has new code (Python and C), new GUI, new mod manager, etc. Scroll to release notes for more details and for GUI example images of the toolkit
