@@ -14,7 +14,7 @@ Modders that use GokonSoftworks, make sure to read the Compatible Mods section o
 
 # GokonSoftworks
 
-Formerly Aldnoah Engine, GokonSoftworks is a Koei Tecmo  modding toolkit for Koei Tecmo/Omega Force games that store their assets inside large containers, use IDX files, compression wrappers, and nested subcontainers.
+Formerly Aldnoah Engine, GokonSoftworks is a Koei Tecmo  modding toolkit for Omega Force games (soon Team Ninja and Gust games as well)
 
 GokonSoftworks is meant to be the foundation for modding the Koei Tecmo games it supports. It can unpack game containers, decompress assets, preserve rebuild metadata, rebuild subcontainers, create mod files, apply mods, disable mods, merge mods, encrypt/decrypt files that rely on encryption, etc. GokonSoftworks also has a rad design, it's not enough for software to be useful, i want using GokonSoftworks to feel like an experience as well. More tools will be made for GokonSoftworks as time goes on.
 
