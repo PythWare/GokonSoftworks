@@ -1,10 +1,12 @@
-# The future of GokonSoftworks, supporting Team Ninja and Gust games for modding
+# The future of GokonSoftworks, supporting Team Ninja and Gust games for modding as well as RDB/fdata formats
 
-More games are planned to be supported. For example, I may support the Dead or Alive community for modding. I've looked into the formats those games use, I could easily add them as supported games along with games from Gust like Atelier. I want GokonSoftworks to be the true foundation of all Koei Tecmo games for modding.
+More games are planned to be supported. For example, Dead or Alive games ate planned for modding support (specifically DOA 5 and older games since Team Ninja is still working on DOA 6). I've looked into the formats Team Ninja and Gust uses. Regarding Gust, Atelier games are planned for modding support in GokonSoftworks. I want GokonSoftworks to be the true foundation of all Koei Tecmo PC games for modding.
 
 Also, the next update of GokonSoftworks will resolve an issue I was informed of. Some subcontainers have evaded detection for DW8E during the unpacking phase, meaning some subs are not unpacked and retain the .bin extension. So, the next update will add the variations of the signatureless subcontainers I missed. Do be aware that that will make DW8E unpack with even more files than it currently does.
 
-Further, I may fully convert GokonSoftworks to C. Atm the majority of the toolkit is written in C, with Python predominantly handling the GUI and some other small things. I can recreate the GUI in C. The real benefit of GokonSoftworks going full C is that it removes Python and Pillow as requirements to use the toolkit, you'd pretty much just download a standalone executable if I go full C, 0 dependencies while still retaining my rad GUI designs.
+Further, I may fully convert GokonSoftworks to C. Atm the majority of the toolkit is written in C, with some Python. I can recreate the GUI in C. The real benefit of GokonSoftworks going full C is that it removes Python and Pillow as requirements to use the toolkit, you'd pretty much just download a standalone executable if I go full C, 0 dependencies while still retaining my rad GUI designs.
+
+Lastly, the RDB and fdata formats newer Koei Tecmo games use will be supported by GokonSoftworks. Due to the scale of that, it will take a few montha to fully complete GokonSoftworks' new overhaul since RDB and fdata are vastly different from LINKDATA v1 and v2.
 
 # Version 3.0 info
 
