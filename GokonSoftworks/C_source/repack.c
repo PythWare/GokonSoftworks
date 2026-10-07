@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include "repack.h"
 #include "zp1.h"
+#include "btsc.h"
 #include "codec.h"
 #include "legacy.h"
 #include <windows.h>
@@ -611,6 +612,32 @@ oom:
     return 0;
 }
 
+static int finish_tail(buf *out, const unsigned char *original, size_t original_len,
+                       size_t original_end) {
+    if (original_end == 0 || original_end >= original_len) {
+        return 1;
+    }
+    size_t tail = original_len - original_end;
+    unsigned char filler = original[original_end];
+    int uniform_tail = filler == 0 || filler == 0xFF;
+    for (size_t i = original_end; i < original_len && uniform_tail; i++) {
+        uniform_tail = original[i] == filler;
+    }
+    static const size_t alignments[] = {16, 8, 4, 2};
+    for (size_t i = 0; uniform_tail && tail < 16 && i < sizeof(alignments) / sizeof(alignments[0]); i++) {
+        size_t step = alignments[i];
+        if (codec_align_up(original_end, step) == original_len) {
+            size_t pad = codec_align_up(out->len, step) - out->len;
+            int ok = 1;
+            for (size_t k = 0; k < pad && ok; k++) {
+                ok = buf_putc(out, filler);
+            }
+            return ok;
+        }
+    }
+    return buf_put(out, original + original_end, tail);
+}
+
 static int rebuild_from_chunks(const unsigned char *blob, size_t blob_len, const sub_layout *layout,
                                const chunk_list *chunks, arena *a, buf *out, err *e) {
     buf_reset(out);
@@ -842,7 +869,8 @@ static int rebuild_from_chunks(const unsigned char *blob, size_t blob_len, const
         size_t cursor = prefix_end;
         for (size_t i = 0; i < chunks->count; i++) {
             new_offsets[i] = cursor;
-            cursor += chunks->items[i].len;
+            cursor += layout->child_align ? align_up_to(chunks->items[i].len, layout->child_align)
+                                          : chunks->items[i].len;
         }
 
         poke_word((unsigned char *)out->data, (uint32_t)layout->count, layout->big_endian);
@@ -860,8 +888,12 @@ static int rebuild_from_chunks(const unsigned char *blob, size_t blob_len, const
         }
 
         for (size_t i = 0; i < chunks->count; i++) {
-            if (chunks->items[i].len > 0 &&
-                !buf_put(out, chunks->items[i].data, chunks->items[i].len)) {
+            size_t padded = layout->child_align
+                                ? align_up_to(chunks->items[i].len, layout->child_align)
+                                : chunks->items[i].len;
+            if ((chunks->items[i].len > 0 &&
+                 !buf_put(out, chunks->items[i].data, chunks->items[i].len)) ||
+                !buf_zeros(out, padded - chunks->items[i].len)) {
                 err_set(e, "out of memory rebuilding a TOC subcontainer");
                 return 0;
             }
@@ -883,7 +915,10 @@ static int rebuild_from_chunks(const unsigned char *blob, size_t blob_len, const
             return 0;
         }
         for (size_t i = 0; i < chunks->count; i++) {
-            if (!buf_word(out, (uint32_t)chunks->items[i].len, layout->big_endian)) {
+            size_t padded = layout->child_align
+                                ? align_up_to(chunks->items[i].len, layout->child_align)
+                                : chunks->items[i].len;
+            if (!buf_word(out, (uint32_t)padded, layout->big_endian)) {
                 err_set(e, "out of memory rebuilding a sequential subcontainer");
                 return 0;
             }
@@ -893,11 +928,23 @@ static int rebuild_from_chunks(const unsigned char *blob, size_t blob_len, const
             return 0;
         }
         for (size_t i = 0; i < chunks->count; i++) {
-            if (chunks->items[i].len > 0 &&
-                !buf_put(out, chunks->items[i].data, chunks->items[i].len)) {
+            size_t padded = layout->child_align
+                                ? align_up_to(chunks->items[i].len, layout->child_align)
+                                : chunks->items[i].len;
+            if ((chunks->items[i].len > 0 &&
+                 !buf_put(out, chunks->items[i].data, chunks->items[i].len)) ||
+                !buf_zeros(out, padded - chunks->items[i].len)) {
                 err_set(e, "out of memory rebuilding a sequential subcontainer");
                 return 0;
             }
+        }
+        size_t original_end = layout->data_start;
+        for (size_t i = 0; i < layout->seq_count; i++) {
+            original_end += layout->seq_sizes[i];
+        }
+        if (!finish_tail(out, blob, blob_len, original_end)) {
+            err_set(e, "out of memory rebuilding a sequential subcontainer");
+            return 0;
         }
         return 1;
     }
@@ -956,6 +1003,8 @@ static int rebuild_from_chunks(const unsigned char *blob, size_t blob_len, const
             new_off[i] = off;
             previous_end = off + new_size[i];
             have_previous = 1;
+        } else if (layout->offs[i] != 0) {
+            new_off[i] = have_previous ? previous_end : header_size;
         } else {
             new_off[i] = 0;
         }
@@ -996,6 +1045,18 @@ static int rebuild_from_chunks(const unsigned char *blob, size_t blob_len, const
         }
     }
 
+    {
+        size_t original_end = 0;
+        for (size_t i = 0; i < slots; i++) {
+            if (layout->sizes[i] > 0 && layout->offs[i] + layout->sizes[i] > original_end) {
+                original_end = layout->offs[i] + layout->sizes[i];
+            }
+        }
+        if (!finish_tail(out, blob, blob_len, original_end)) {
+            goto pt_oom;
+        }
+    }
+
     free(gaps);
     free(new_off);
     free(new_size);
@@ -1011,12 +1072,144 @@ pt_oom:
     return 0;
 }
 
-static int rebuild_kvs_folder(const char *folder, buf *out, err *e) {
+static size_t kvs_size_at(const unsigned char *data, size_t off) {
+    if (codec_big_endian()) {
+        return ((size_t)data[off] << 24) | ((size_t)data[off + 1] << 16) |
+               ((size_t)data[off + 2] << 8) | (size_t)data[off + 3];
+    }
+    return codec_u32(data, off);
+}
+
+static size_t kvs_stream_end(const unsigned char *blob, size_t n) {
+    size_t pos = 0;
+    size_t last_end = 0;
+    while (pos + 32 <= n) {
+        if (memcmp(blob + pos, "KOVS", 4) != 0) {
+            size_t scan = pos;
+            while (scan + 4 <= n && memcmp(blob + scan, "KOVS", 4) != 0) {
+                scan += 4;
+            }
+            if (scan + 32 > n) {
+                break;
+            }
+            pos = scan;
+        }
+        size_t size = kvs_size_at(blob, pos + 4);
+        if (size == 0 || pos + 32 + size > n) {
+            break;
+        }
+        last_end = pos + 32 + size;
+        pos = codec_align_up(last_end, 16);
+    }
+    return last_end;
+}
+
+static size_t kvs_alignment(const unsigned char *blob, size_t n) {
+    size_t alignment = 0x800;
+    int later_streams = 0;
+    size_t pos = 0;
+    while (pos + 32 <= n) {
+        if (memcmp(blob + pos, "KOVS", 4) != 0) {
+            size_t scan = pos;
+            while (scan + 4 <= n && memcmp(blob + scan, "KOVS", 4) != 0) {
+                scan += 4;
+            }
+            if (scan + 32 > n) {
+                break;
+            }
+            pos = scan;
+        }
+        size_t size = kvs_size_at(blob, pos + 4);
+        if (size == 0 || pos + 32 + size > n) {
+            break;
+        }
+        if (pos > 0) {
+            later_streams++;
+            while (alignment > 16 && pos % alignment != 0) {
+                alignment /= 2;
+            }
+        }
+        pos = codec_align_up(pos + 32 + size, 16);
+    }
+    return later_streams > 0 ? alignment : 16;
+}
+
+static int finish_kvs_tail(buf *out, const unsigned char *original, size_t original_len,
+                           size_t alignment) {
+    size_t stream_end = kvs_stream_end(original, original_len);
+    if (stream_end > 0 && stream_end < original_len && alignment > 16 &&
+        codec_align_up(stream_end, alignment) == original_len) {
+        int zero_tail = 1;
+        for (size_t i = stream_end; i < original_len && zero_tail; i++) {
+            zero_tail = original[i] == 0;
+        }
+        if (zero_tail) {
+            return buf_zeros(out, codec_align_up(out->len, alignment) - out->len);
+        }
+    }
+    return finish_tail(out, original, original_len, stream_end);
+}
+
+static int rebuild_kvs_bank_folder(const char *folder, const unsigned char *original,
+                                   size_t original_len, buf *out, err *e) {
     folder_file *files = NULL;
     size_t count = 0;
     if (!list_folder_files(folder, &files, &count, e)) {
         return 0;
     }
+    static const char *kvs_ext[] = {".kvs"};
+    unsigned char fill = original[8];
+    buf_reset(out);
+    int ok = buf_put(out, original, NESTED_KVS_BANK_HEADER);
+    size_t streams = 0;
+    for (size_t i = 0; i < count && ok; i++) {
+        if (!has_extension(files[i].path, kvs_ext, 1)) {
+            continue;
+        }
+        buf chunk;
+        buf_init(&chunk);
+        if (!file_read_all(files[i].path, &chunk)) {
+            err_set(e, "couldnt read %s", files[i].path);
+            buf_free(&chunk);
+            ok = 0;
+            break;
+        }
+        if (chunk.len < 32 || memcmp(chunk.data, "KOVS", 4) != 0) {
+            err_set(e, "invalid KVS stream in a voice bank rebuild: %s", files[i].path);
+            buf_free(&chunk);
+            ok = 0;
+            break;
+        }
+        ok = buf_put(out, chunk.data, chunk.len);
+        while (ok && out->len % NESTED_KVS_BANK_HEADER != 0) {
+            ok = buf_putc(out, fill);
+        }
+        buf_free(&chunk);
+        streams++;
+    }
+    folder_files_free(files, count);
+    if (ok && streams == 0) {
+        err_set(e, "the voice bank folder has no .kvs files to rebuild");
+        return 0;
+    }
+    if (!ok) {
+        if (!e->set) {
+            err_set(e, "out of memory rebuilding a voice bank");
+        }
+        return 0;
+    }
+    poke_word((unsigned char *)out->data, (uint32_t)streams, codec_big_endian());
+    return 1;
+}
+
+static int rebuild_kvs_folder(const char *folder, const unsigned char *original, size_t original_len,
+                              buf *out, err *e) {
+    folder_file *files = NULL;
+    size_t count = 0;
+    if (!list_folder_files(folder, &files, &count, e)) {
+        return 0;
+    }
+    size_t alignment = kvs_alignment(original, original_len);
 
     static const char *kvs_ext[] = {".kvs"};
     buf_reset(out);
@@ -1041,19 +1234,13 @@ static int rebuild_kvs_folder(const char *folder, buf *out, err *e) {
             ok = 0;
             break;
         }
-        size_t size = codec_u32((const unsigned char *)chunk.data, 4);
+        size_t size = kvs_size_at((const unsigned char *)chunk.data, 4);
         size_t data_end = 32 + size;
         if (data_end > chunk.len) {
             data_end = chunk.len;
         }
-        if (!buf_put(out, chunk.data, data_end)) {
-            err_set(e, "out of memory rebuilding KVS");
-            buf_free(&chunk);
-            ok = 0;
-            break;
-        }
-        size_t pad = (16 - (out->len % 16)) % 16;
-        if (pad > 0 && !buf_zeros(out, pad)) {
+        size_t pad = codec_align_up(out->len, alignment) - out->len;
+        if ((pad > 0 && !buf_zeros(out, pad)) || !buf_put(out, chunk.data, data_end)) {
             err_set(e, "out of memory rebuilding KVS");
             buf_free(&chunk);
             ok = 0;
@@ -1066,6 +1253,10 @@ static int rebuild_kvs_folder(const char *folder, buf *out, err *e) {
     folder_files_free(files, count);
     if (ok && !wrote_any) {
         err_set(e, "the KVS folder has no .kvs files to rebuild");
+        return 0;
+    }
+    if (ok && !finish_kvs_tail(out, original, original_len, alignment)) {
+        err_set(e, "out of memory rebuilding KVS");
         return 0;
     }
     return ok;
@@ -1372,6 +1563,52 @@ static int rebuild_zp1_folder(const char *folder, const unsigned char *original,
     return ok;
 }
 
+static int rebuild_cstb_folder(const char *folder, const unsigned char *original,
+                               size_t original_len, buf *out, err *e) {
+    char **paths = NULL;
+    size_t found = 0;
+    if (!repack_list_sorted(folder, &paths, &found, e)) {
+        return 0;
+    }
+    if (found != 1) {
+        err_set(e, "a CSTB holds one payload and the folder has %zu files", found);
+        repack_free_sorted(paths, found);
+        return 0;
+    }
+
+    buf body;
+    buf_init(&body);
+    if (!repack_read_chunk(paths[0], &body, e)) {
+        buf_free(&body);
+        repack_free_sorted(paths, found);
+        return 0;
+    }
+    repack_free_sorted(paths, found);
+
+    buf work;
+    buf_init(&work);
+    err quiet;
+    err_clear(&quiet);
+    int same = btsc_decompress(original, original_len, &work, &quiet) &&
+               work.len == body.len &&
+               (body.len == 0 || memcmp(work.data, body.data, body.len) == 0);
+    buf_free(&work);
+
+    int ok;
+    if (same) {
+        buf_reset(out);
+        ok = buf_put(out, original, original_len);
+        if (!ok) {
+            err_set(e, "out of memory restoring a CSTB entry");
+        }
+    } else {
+        ok = btsc_compress((const unsigned char *)body.data, body.len,
+                           btsc_block_size(original, original_len), out, e);
+    }
+    buf_free(&body);
+    return ok;
+}
+
 static int rebuild_colk_folder(const char *folder, const unsigned char *original,
                                size_t original_len, buf *out, err *e) {
     if (!nested_looks_like_colk(original, original_len)) {
@@ -1545,15 +1782,54 @@ static int rebuild_split_wrapper_folder(const char *folder, const unsigned char 
     return ok;
 }
 
+static int rebuild_stored_split(const unsigned char *original, const buf *payload, buf *out, err *e) {
+    uint32_t block = codec_u32(original, 0x00);
+    if (payload->len == 0) {
+        err_set(e, "a stored split resource cant hold an empty payload");
+        return 0;
+    }
+    size_t count = (payload->len + block - 1) / block;
+    if (count > 0xFFFF || payload->len > 0xFFFFFFFFu) {
+        err_set(e, "the payload is too large for a stored split resource");
+        return 0;
+    }
+
+    buf_reset(out);
+    int ok = buf_put(out, original, 4) && buf_u32(out, (uint32_t)count) &&
+             buf_u32(out, (uint32_t)payload->len);
+    for (size_t i = 0; ok && i < count; i++) {
+        size_t start = i * block;
+        size_t take = payload->len - start < block ? payload->len - start : block;
+        ok = buf_u32(out, (uint32_t)take);
+    }
+    if (ok) {
+        ok = buf_zeros(out, codec_align_up(out->len, 0x80) - out->len);
+    }
+    for (size_t i = 0; ok && i < count; i++) {
+        size_t start = i * block;
+        size_t take = payload->len - start < block ? payload->len - start : block;
+        ok = buf_put(out, (const unsigned char *)payload->data + start, take) &&
+             buf_zeros(out, codec_align_up(out->len, 0x80) - out->len);
+    }
+    if (!ok) {
+        err_set(e, "out of memory rebuilding a stored split resource");
+    }
+    return ok;
+}
+
 static int rebuild_classic_split_folder(const char *folder, const unsigned char *original,
                                         size_t original_len, buf *out, err *e) {
     arena a;
     arena_init(&a);
     split_layout layout;
+    int stored_only = 0;
     if (!codec_read_split_layout(original, original_len, &a, &layout)) {
-        arena_free(&a);
-        err_set(e, "the original file isnt a classic split-zlib resource");
-        return 0;
+        if (!codec_read_stored_layout(original, original_len, &a, &layout)) {
+            arena_free(&a);
+            err_set(e, "the original file isnt a classic split-zlib resource");
+            return 0;
+        }
+        stored_only = 1;
     }
 
     folder_file *files = NULL;
@@ -1600,6 +1876,13 @@ static int rebuild_classic_split_folder(const char *folder, const unsigned char 
         }
     }
     buf_free(&original_payload);
+
+    if (stored_only) {
+        ok = rebuild_stored_split(original, &payload, out, e);
+        buf_free(&payload);
+        arena_free(&a);
+        return ok;
+    }
 
     size_t alignment = 0;
     size_t *extra_gaps = (size_t *)arena_alloc(&a, sizeof(size_t) * (layout.chunk_count + 1));
@@ -1923,6 +2206,14 @@ static int rebuild_universal_folder(const char *folder, const unsigned char *ori
                 }
             }
 
+            if (matches_inner && matches_outer && chunks.count == 1) {
+                sub_layout shape;
+                int payload_kept = nested_read_universal_layout(chunks.items[0].data, chunks.items[0].len,
+                                                                &inner_arena, &shape) &&
+                                   shape.kind == inner.kind && shape.count == inner.count;
+                matches_outer = payload_kept;
+            }
+
             if (matches_inner && !matches_outer) {
                 buf inner_out;
                 buf_init(&inner_out);
@@ -1943,6 +2234,13 @@ static int rebuild_universal_folder(const char *folder, const unsigned char *ori
                     if (payload_end > 0 && payload_end < single_len) {
                         trailer_len = single_len - payload_end;
                         ok = buf_put(&inner_out, original + single_off + payload_end, trailer_len);
+                    }
+                }
+                if (ok && range_count == 1 && ranges_off[0] == single_off &&
+                    ranges_size[0] > single_len && single_off + ranges_size[0] <= original_len) {
+                    ok = finish_tail(&inner_out, original + single_off, ranges_size[0], single_len);
+                    if (!ok) {
+                        err_set(e, "out of memory rebuilding a nested subcontainer");
                     }
                 }
                 if (ok) {
@@ -2057,6 +2355,26 @@ static int rebuild_pd2_folder(const char *folder, const unsigned char *original,
     return ok;
 }
 
+static int folder_came_from_pd2(const char *folder) {
+    size_t len = strlen(folder);
+    while (len > 0 && (folder[len - 1] == '\\' || folder[len - 1] == '/')) {
+        len--;
+    }
+    char *sibling = (char *)malloc(len + 5);
+    if (sibling == NULL) {
+        return 0;
+    }
+    memcpy(sibling, folder, len);
+    memcpy(sibling + len, ".pd2", 5);
+    int found = path_is_file(sibling);
+    if (!found) {
+        memcpy(sibling + len, ".PD2", 5);
+        found = path_is_file(sibling);
+    }
+    free(sibling);
+    return found;
+}
+
 int repack_from_folder(const char *folder, const unsigned char *original, size_t original_len,
                        buf *out, err *e) {
     arena probe;
@@ -2078,19 +2396,28 @@ int repack_from_folder(const char *folder, const unsigned char *original, size_t
         arena_free(&probe);
         return rebuild_zp1_folder(folder, original, original_len, out, e);
     }
+    if (btsc_looks_like(original, original_len)) {
+        arena_free(&probe);
+        return rebuild_cstb_folder(folder, original, original_len, out, e);
+    }
+    if (nested_kvs_bank_count(original, original_len) > 0) {
+        arena_free(&probe);
+        return rebuild_kvs_bank_folder(folder, original, original_len, out, e);
+    }
     if (codec_looks_like_pairtable(original, original_len, &probe)) {
         arena_free(&probe);
         return rebuild_split_wrapper_folder(folder, original, original_len, out, e);
     }
-    if (codec_looks_like_classic_split(original, original_len, &probe)) {
+    if (codec_looks_like_classic_split(original, original_len, &probe) ||
+        codec_looks_like_stored_split(original, original_len, &probe)) {
         arena_free(&probe);
         return rebuild_classic_split_folder(folder, original, original_len, out, e);
     }
     if (original_len >= 4 && memcmp(original, "KOVS", 4) == 0) {
         arena_free(&probe);
-        return rebuild_kvs_folder(folder, out, e);
+        return rebuild_kvs_folder(folder, original, original_len, out, e);
     }
-    if (legacy_looks_like_pd2(original, original_len)) {
+    if (folder_came_from_pd2(folder) && legacy_looks_like_pd2(original, original_len)) {
         arena_free(&probe);
         return rebuild_pd2_folder(folder, original, original_len, out, e);
     }
@@ -2136,39 +2463,6 @@ int repack_from_folder(const char *folder, const unsigned char *original, size_t
         return 0;
     }
     return 1;
-}
-
-static char *nested_folder_for(const char *file_path) {
-    const char *slash = strrchr(file_path, '\\');
-    const char *fname = slash == NULL ? file_path : slash + 1;
-    const char *dot = strrchr(fname, '.');
-    size_t dir_len = slash == NULL ? 0 : (size_t)(slash - file_path);
-    size_t stem_len = dot == NULL ? strlen(fname) : (size_t)(dot - fname);
-
-    char *folder = (char *)malloc(dir_len + 1 + stem_len + 1);
-    if (folder == NULL) {
-        return NULL;
-    }
-    if (dir_len > 0) {
-        memcpy(folder, file_path, dir_len);
-        folder[dir_len] = '\\';
-        memcpy(folder + dir_len + 1, fname, stem_len);
-        folder[dir_len + 1 + stem_len] = 0;
-    } else {
-        memcpy(folder, fname, stem_len);
-        folder[stem_len] = 0;
-    }
-    return folder;
-}
-
-int repack_has_nested_folder(const char *file_path) {
-    char *folder = nested_folder_for(file_path);
-    if (folder == NULL) {
-        return 0;
-    }
-    int hit = path_is_dir(folder);
-    free(folder);
-    return hit;
 }
 
 int repack_read_chunk(const char *file_path, buf *out, err *e) {

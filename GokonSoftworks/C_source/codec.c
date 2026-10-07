@@ -400,6 +400,81 @@ int codec_looks_like_classic_split(const unsigned char *data, size_t len, arena 
     return codec_read_split_layout(data, len, a, &layout);
 }
 
+static int zero_span(const unsigned char *data, size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+        if (data[i] != 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int codec_read_stored_layout(const unsigned char *data, size_t len, arena *a, split_layout *out) {
+    if (len < 0x80) {
+        return 0;
+    }
+    uint32_t block = codec_u32(data, 0x00);
+    uint16_t chunk_count = codec_u16(data, 0x04);
+    uint32_t total_unc = codec_u32(data, 0x08);
+    if (block == 0 || chunk_count == 0 || codec_u16(data, 0x06) != 0 || total_unc == 0) {
+        return 0;
+    }
+    size_t header_end = 0x0C + (size_t)4 * chunk_count;
+    size_t first = codec_align_up(header_end, 0x80);
+    if (first > len || !zero_span(data, header_end, first)) {
+        return 0;
+    }
+
+    uint32_t *sizes = (uint32_t *)arena_alloc(a, sizeof(uint32_t) * chunk_count);
+    split_chunk *chunks = (split_chunk *)arena_alloc(a, sizeof(split_chunk) * chunk_count);
+    if (sizes == NULL || chunks == NULL) {
+        return 0;
+    }
+
+    uint64_t sum = 0;
+    size_t ptr = first;
+    for (uint16_t idx = 0; idx < chunk_count; idx++) {
+        uint32_t chunk_size = codec_u32(data, 0x0C + (size_t)4 * idx);
+        int last = idx + 1 == chunk_count;
+        if (chunk_size == 0 || chunk_size > block || (!last && chunk_size != block)) {
+            return 0;
+        }
+        if (ptr + chunk_size > len) {
+            return 0;
+        }
+        sizes[idx] = chunk_size;
+        chunks[idx].offset = ptr;
+        chunks[idx].payload_off = ptr;
+        chunks[idx].payload_size = chunk_size;
+        chunks[idx].compressed = 0;
+        chunks[idx].table_size = chunk_size;
+        sum += chunk_size;
+        size_t next = codec_align_up(ptr + chunk_size, 0x80);
+        if (next > len || !zero_span(data, ptr + chunk_size, next)) {
+            return 0;
+        }
+        ptr = next;
+    }
+    if (sum != (uint64_t)total_unc || ptr != len) {
+        return 0;
+    }
+
+    out->unk0 = codec_u16(data, 0x00);
+    out->file_type = codec_u16(data, 0x02);
+    out->chunk_count = chunk_count;
+    out->unk1 = 0;
+    out->total_unc = total_unc;
+    out->header_end = header_end;
+    out->sizes = sizes;
+    out->chunks = chunks;
+    return 1;
+}
+
+int codec_looks_like_stored_split(const unsigned char *data, size_t len, arena *a) {
+    split_layout layout;
+    return codec_read_stored_layout(data, len, a, &layout);
+}
+
 static int read_pairtable(const unsigned char *data, size_t len, arena *a,
                           size_t **offsets_out, size_t **sizes_out, uint32_t *count_out);
 
@@ -549,7 +624,8 @@ static const char *split_ext_for_type(uint16_t file_type) {
 int codec_decompress_classic_split(const unsigned char *data, size_t len, arena *a,
                                    buf *out, const char **ext_hint, err *e) {
     split_layout layout;
-    if (!codec_read_split_layout(data, len, a, &layout)) {
+    if (!codec_read_split_layout(data, len, a, &layout) &&
+        !codec_read_stored_layout(data, len, a, &layout)) {
         err_set(e, "split zlib stream: structure didnt match");
         return 0;
     }
@@ -690,7 +766,7 @@ static const magic_rule magic_table[] = {
     {"G1TG", 4, ".g1t"}, {"KLDM", 4, ".mdlk"}, {"SDF_", 4, ".sdf"},
     {"PAC0", 4, ".pac"}, {"SM4L", 4, ".idx"},
     {"COLK", 4, ".colk"}, {"MDL ", 4, ".mdl"}, {"KFTK", 4, ".ktfk"},
-    {"KSHL", 4, ".KSHL"},
+    {"KSHL", 4, ".KSHL"}, {"BTSC", 4, ".cstb"},
     {"zp1", 3, ".zp1"},
     {"XFT", 3, ".xft"}, {"XKM", 3, ".xkm"}, {"GT1", 3, ".g1t"},
     {"BM", 2, ".bmp"}, {"XL", 2, ".xl"},

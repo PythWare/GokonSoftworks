@@ -22,6 +22,7 @@ class PouredEntry:
     comp_marker: int
     size: int
     digest: str = ""
+    container: str = ""
 
 @dataclass
 class Recipe:
@@ -80,7 +81,6 @@ class Recipe:
     def audio_start(self) -> int:
         return self.images_start + sum(int(image["size"]) for image in self.images)
 
-
 def read_recipe(path) -> Recipe:
     path = Path(path)
     try:
@@ -110,6 +110,7 @@ def read_recipe(path) -> Recipe:
                     comp_marker=int(raw.get("comp_marker", 0)),
                     size=int(raw["payload_size"]),
                     digest=raw.get("payload_sha256", ""),
+                    container=raw.get("container", ""),
                 ))
             return recipe
     except OSError as exc:

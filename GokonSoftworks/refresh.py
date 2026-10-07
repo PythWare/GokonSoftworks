@@ -20,7 +20,6 @@ PIL_MESSAGE = (
 
 SETTINGS_FILENAME = "gokonsoftworks_settings.json"
 
-
 @dataclass(frozen=True)
 class Theme:
 
@@ -39,7 +38,6 @@ class Theme:
     danger: str
     shelf: str
     shelf_edge: str
-
 
 THEMES: tuple[Theme, ...] = (
     Theme(
@@ -194,7 +192,6 @@ def wrap_one(font: tkfont.Font, text: str, max_width: int, start: int = 0) -> tu
         return text[begin:begin + cut], begin + cut
     return text[begin:last_fit], last_fit
 
-
 def fit_line(font: tkfont.Font, text: str, max_width: int) -> str:
     if max_width <= 0 or font.measure(text) <= max_width:
         return text
@@ -206,7 +203,6 @@ def fit_line(font: tkfont.Font, text: str, max_width: int) -> str:
     if font.measure(text[:cut]) > budget:
         cut = 0
     return text[:cut].rstrip() + ellipsis
-
 
 def wrap_lines(font: tkfont.Font, text: str, max_width: int, max_lines: int = 0) -> list[str]:
     lines: list[str] = []
@@ -226,7 +222,6 @@ def wrap_lines(font: tkfont.Font, text: str, max_width: int, max_lines: int = 0)
 def require_pil():
     if not PIL_AVAILABLE:
         raise RuntimeError(PIL_MESSAGE)
-
 
 def scale_to_height(image, height: int):
     require_pil()
@@ -282,7 +277,6 @@ class Panel(CanvasWidget):
         if self.title_item is not None:
             self.canvas.coords(self.title_item, x + 14, y + 12)
             self.canvas.itemconfigure(self.title_item, width=max(10, width - 28))
-
 
 class Button(CanvasWidget):
 
@@ -407,7 +401,6 @@ class ProgressBar(CanvasWidget):
         self.canvas.coords(self.track_item, x, y, x + width, y + self.height)
         self.canvas.coords(self.fill_item, x, y, x + width * self.fraction, y + self.height)
 
-
 class StatusLog(CanvasWidget):
 
     MAX_LINES = 400
@@ -475,7 +468,6 @@ class StatusLog(CanvasWidget):
             "danger": self.theme.danger,
             "accent": self.theme.accent,
         }.get(tone, self.theme.text_muted)
-
 
     def block_mode(self) -> bool:
         return bool(self.blocks)
@@ -571,7 +563,6 @@ class StatusLog(CanvasWidget):
     def clear(self):
         self.set_text("")
 
-
     def write(self, text: str, tone: str = "muted"):
         colour = self.tone_colour(tone)
         self.messages.append((text, colour))
@@ -629,7 +620,6 @@ class StatusLog(CanvasWidget):
             else:
                 self.canvas.itemconfigure(item, text="")
         self.refresh_bar()
-
 
     def track_bounds(self) -> tuple[float, float, float, float]:
         left = self.x + self.width - self.BAR_WIDTH - 3
@@ -691,7 +681,7 @@ class StatusLog(CanvasWidget):
         thumb = self.thumb_bounds()
         if thumb is None:
             return
-        _left, track_top, _right, track_bottom = self.track_bounds()
+        leftt, track_top, rightt, track_bottom = self.track_bounds()
         height = thumb[3] - thumb[1]
         travel = (track_bottom - track_top) - height
         if travel <= 0:
@@ -920,8 +910,6 @@ class Worker:
         else:
             self.polling = False
 
-
-
 SPARKLE_SIZE = 34
 SPARKLE_FRAME_COUNT = 14
 sparkle_frame_cache: dict = {}
@@ -971,7 +959,6 @@ def render_sparkle_frames(rgb: tuple, size: int = SPARKLE_SIZE,
         frames.append(img)
     return frames
 
-
 def sparkle_frames_for(colour: str, size: int = SPARKLE_SIZE,
                        frame_count: int = SPARKLE_FRAME_COUNT) -> list:
     key = (colour, size, frame_count)
@@ -981,7 +968,6 @@ def sparkle_frames_for(colour: str, size: int = SPARKLE_SIZE,
         sparkle_frame_cache[key] = frames
     return frames
 
-
 def sparkle_photo(colour: str, frame_index: int):
     key = (colour, frame_index)
     photo = sparkle_photo_cache.get(key)
@@ -990,7 +976,6 @@ def sparkle_photo(colour: str, frame_index: int):
         photo = ImageTk.PhotoImage(frames[frame_index % len(frames)])
         sparkle_photo_cache[key] = photo
     return photo
-
 
 class SparkleBurst:
 
@@ -1008,7 +993,6 @@ class SparkleBurst:
     @property
     def visible(self) -> bool:
         return self.frame_index >= 0
-
 
 def spawn_sparkle_cluster(cx: float, cy: float, spread: int = 22,
                           count_range: tuple = (3, 5),
@@ -1163,7 +1147,6 @@ class MenuList(CanvasWidget):
             self.canvas.coords(dot, cx - self.DOT_RADIUS, bottom - self.DOT_RADIUS,
                                cx + self.DOT_RADIUS, bottom + self.DOT_RADIUS)
 
-
 def letterbox(data: bytes, width: int, height: int, background: str):
     import io
 
@@ -1174,7 +1157,6 @@ def letterbox(data: bytes, width: int, height: int, background: str):
     canvas.paste(image.resize(size, Image.Resampling.LANCZOS),
                  ((width - size[0]) // 2, (height - size[1]) // 2))
     return canvas
-
 
 def keep_front(window: tk.Misc):
     try:

@@ -5,6 +5,7 @@
 #include "codec.h"
 #include "crypt.h"
 #include "legacy.h"
+#include "linkv2.h"
 #include "nested.h"
 #include <windows.h>
 #include <stdio.h>
@@ -133,7 +134,7 @@ void manifest_container(manifest_writer *m, int idx_marker, const char *containe
     jw_kv_str(&m->w, key, container_path);
 }
 
-static void manifest_files_open(manifest_writer *m) {
+void manifest_files_open(manifest_writer *m) {
     jw_obj_close(&m->w);
     jw_key(&m->w, "files");
     jw_obj_open(&m->w);
@@ -998,6 +999,14 @@ int unpack_run(job_ctx *job, const unpack_opts *opts, unpack_stats *stats, err *
     manifest_writer manifest;
     unpack_run_state st;
     memset(&st, 0, sizeof(st));
+
+    if (s->family == SCHEMA_FAMILY_LINKDATA_V2) {
+        if (!manifest_begin(&manifest, opts->state_dir, opts->out_root, s->game_id, e)) {
+            goto cleanup_paths;
+        }
+        result = linkv2_run(job, opts, stats, &manifest, e);
+        goto cleanup_run;
+    }
 
     if ((idx_found == 0 || bin_found == 0) && s->family == SCHEMA_FAMILY_LEGACY &&
         s->container_count > 0 && s->idx_count > 0) {

@@ -354,6 +354,8 @@ class ModCreatorWindow(tk.Toplevel):
                 "idx_marker": int(record["idx_marker"]),
                 "entry_off": int(record["entry_off"]),
             }
+            if record.get("container"):
+                entry["container"] = record["container"]
             codec = record.get("codec")
             if codec:
                 entry["codec"] = codec
@@ -396,7 +398,6 @@ class ModCreatorWindow(tk.Toplevel):
             self.say(
                 f"{out_path.name}: {result['entries']} files, "
                 f"{human_size(result['payload_bytes'])}, "
-                f"{result['rebuilt_entries']} rebuilt, "
                 f"{result['encrypted_entries']} scrambled, "
                 f"{result['images']} previews"
                 + (", theme tune bundled" if result.get('audio_bytes') else "") + ".",

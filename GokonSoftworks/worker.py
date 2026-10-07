@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import atexit, json, os, queue, subprocess, threading
 from pathlib import Path
 
@@ -160,7 +159,6 @@ class Backend:
             except subprocess.TimeoutExpired:
                 pass
         self.process = None
-
 
 shared_backend: Backend | None = None
 

@@ -12,7 +12,6 @@
 typedef struct {
     int64_t entries;
     int64_t payload_bytes;
-    int64_t rebuilt_entries;
     int64_t encrypted_entries;
     int64_t compressed_entries;
     int64_t images;

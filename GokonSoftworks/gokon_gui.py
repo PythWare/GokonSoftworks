@@ -384,7 +384,7 @@ class CoreTools:
         if not (source / game["unpack_folder"]).is_dir():
             messagebox.showwarning(
                 "Rebuild Containers",
-                "Unpack the containers first, there is nothing to rebuild from.",
+                "Unpack the containers first, there's nothing to rebuild from.",
                 parent=self.root,
             )
             return

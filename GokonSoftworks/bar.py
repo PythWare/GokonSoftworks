@@ -27,7 +27,8 @@ from .refresh import (
     spawn_sparkle_cluster,
     wrap_lines,
 )
-from .returns import apply_recipe, capture_container_sizes, disable_all, disable_recipe
+from .returns import (apply_recipe, capture_container_sizes, container_file, disable_all,
+                      disable_recipe)
 from .wetworks import (
     PROJECT_ROOT,
     GokonSoftworksError,
@@ -522,7 +523,7 @@ class ModManagerWindow(tk.Toplevel):
             original = self.tab.original_size(index)
             if original is None:
                 continue
-            path = self.game_dir / name
+            path = container_file(self.game, self.game_dir, index, name)
             if path.is_file():
                 total += max(0, path.stat().st_size - int(original))
         return total
@@ -951,7 +952,7 @@ class ModManagerWindow(tk.Toplevel):
             self.say("Audio playback is unavailable on this system.", "danger")
             return
         if not self.player.play_loop_bytes(self.current_audio):
-            self.say("Bundled audio is not a playable WAV.", "danger")
+            self.say("Bundled audio isnt a playable WAV.", "danger")
 
     def stop_audio(self):
         self.player.stop()

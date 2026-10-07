@@ -32,6 +32,7 @@ typedef struct {
 } manifest_writer;
 
 void manifest_container(manifest_writer *m, int idx_marker, const char *container_path);
+void manifest_files_open(manifest_writer *m);
 void manifest_record(manifest_writer *m, const char *key, int idx_marker,
                      int64_t entry_off, int comp_marker, const char *container,
                      int64_t entry_index, int64_t unpacked_size, const char *ext,

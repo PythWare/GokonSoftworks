@@ -4,6 +4,7 @@
 #include "util.h"
 #define NESTED_MAX_COUNT 100000
 #define NESTED_MAX_DEPTH 64
+#define NESTED_KVS_BANK_HEADER 0x800
 
 typedef enum {
     LAYOUT_NONE = 0,
@@ -56,6 +57,7 @@ typedef struct {
     size_t data_start;
     size_t seq_count;
     size_t *seq_sizes;
+    size_t child_align;
 
     size_t outer_count;
     size_t primary_block_off;
@@ -107,6 +109,7 @@ int nested_colk_endian(const unsigned char *blob, size_t len);
 size_t nested_colk_children(const unsigned char *blob, size_t len, size_t index,
                             size_t *start_out);
 int nested_looks_like_embedded_mdlk(const unsigned char *blob, size_t len);
+size_t nested_kvs_bank_count(const unsigned char *blob, size_t len);
 int nested_read_embedded_mdlk_entries(const unsigned char *blob, size_t len, arena *a,
                                       size_t **offs_out, size_t **sizes_out, size_t *count_out);
 size_t nested_layout_expected_counts(const sub_layout *layout, size_t out[2]);

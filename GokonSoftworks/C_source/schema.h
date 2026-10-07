@@ -6,7 +6,8 @@
 
 typedef enum {
     SCHEMA_FAMILY_LINKDATA = 0,
-    SCHEMA_FAMILY_LEGACY = 1
+    SCHEMA_FAMILY_LEGACY = 1,
+    SCHEMA_FAMILY_LINKDATA_V2 = 2
 } schema_family;
 
 typedef struct {

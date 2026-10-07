@@ -144,6 +144,33 @@ static const game_schema schemas[] = {
         0, 0, {NULL}, 0, 0,
         SCHEMA_FAMILY_LEGACY
     },
+    {
+        "AOT1", "A.O.T. Wings of Freedom",
+        {NULL}, 0,
+        {NULL}, 0,
+        "AOT1_Unpacked", 1, 16, 4,
+        {"Offset", "Unused_00", "Original_Size", "Decompressed_Size"}, 4,
+        0, 11, {"Offset"}, 1, 0,
+        SCHEMA_FAMILY_LINKDATA_V2
+    },
+    {
+        "AOT2", "Attack on Titan 2",
+        {NULL}, 0,
+        {NULL}, 0,
+        "AOT2_Unpacked", 1, 16, 4,
+        {"Offset", "Unused_00", "Original_Size", "Decompressed_Size"}, 4,
+        0, 8, {"Offset"}, 1, 0,
+        SCHEMA_FAMILY_LINKDATA_V2
+    },
+    {
+        "OP3", "One Piece Pirate Warriors 3",
+        {NULL}, 0,
+        {NULL}, 0,
+        "OP3_Unpacked", 1, 16, 4,
+        {"Offset", "Unused_00", "Original_Size", "Decompressed_Size"}, 4,
+        0, 11, {"Offset"}, 1, 0,
+        SCHEMA_FAMILY_LINKDATA_V2
+    },
 };
 
 static const int schema_total = (int)(sizeof(schemas) / sizeof(schemas[0]));

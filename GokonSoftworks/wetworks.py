@@ -198,10 +198,10 @@ class Diagnostics:
             self.note("error", f"couldnnt read drive storage: {exc}")
 
         if not self.path.exists():
-            self.note("error", "The toolkit folder doesnt exist.")
+            self.note("error", "The software folder doesnt exist.")
             return
         if not self.path.is_dir():
-            self.note("error", "The toolkit path isnt a folder.")
+            self.note("error", "The software path isnt a folder.")
             return
 
         try:
@@ -315,7 +315,19 @@ def wants_region_pair(name: str) -> bool:
     base = name.replace("\\", "/").rsplit("/", 1)[-1].upper()
     return base.startswith("LINKDATA_") and base.endswith(".BIN")
 
+def candidate_containers_in(parts: list, folder: Path) -> list[str]:
+    found = []
+    for part in parts:
+        for name in part.get("candidates") or []:
+            if (folder / name).is_file():
+                found.append(name)
+                break
+    return found
+
 def containers_in(game: dict, folder: Path) -> list[str]:
+    parts = game.get("parts") or []
+    if any(part.get("candidates") for part in parts):
+        return candidate_containers_in(parts, folder)
     names = list(game.get("containers") or [])
     present = [name for name in names if (folder / name).is_file()]
     if present or not names:

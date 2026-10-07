@@ -4,9 +4,57 @@
 #include "repack.h"
 #include "schema.h"
 #include "legacy.h"
+#include "linkv2.h"
 #include "unpack.h"
 #include <stdlib.h>
 #include <string.h>
+
+static void write_linkv2_parts(json_writer *w, const game_schema *s) {
+    const linkv2_game *game = linkv2_game_for(s->game_id);
+    jw_key(w, "parts");
+    jw_arr_open(w);
+    for (int k = 0; game != NULL && k < game->container_count; k++) {
+        const linkv2_container *c = &game->containers[k];
+        jw_obj_open(w);
+        jw_kv_str(w, "container", c->candidates[0]);
+        jw_kv_str(w, "toc", c->candidates[0]);
+        jw_kv_i64(w, "toc_offset", LINKV2_HEADER_SIZE);
+        jw_kv_i64(w, "entry_size", LINKV2_ENTRY_SIZE);
+        jw_kv_i64(w, "alignment", (int64_t)1 << game->shift_bits);
+        jw_kv_i64(w, "count_offset", 4);
+        jw_kv_i64(w, "sector_field", 0);
+        jw_kv_i64(w, "offset_shift", game->shift_bits);
+        jw_kv_i64(w, "field_size", s->field_size);
+        jw_kv_bool(w, "big_endian", !s->little_endian);
+        jw_key(w, "fields");
+        jw_arr_open(w);
+        for (int q = 0; q < s->field_count; q++) {
+            jw_str(w, s->fields[q]);
+        }
+        jw_arr_close(w);
+        jw_key(w, "shift_fields");
+        jw_arr_open(w);
+        for (int q = 0; q < s->shift_field_count; q++) {
+            jw_str(w, s->shift_fields[q]);
+        }
+        jw_arr_close(w);
+        jw_kv_str(w, "pack", c->pack);
+        jw_kv_bool(w, "named", 1);
+        jw_kv_bool(w, "patchable", 1);
+        jw_kv_i64(w, "magic", game->magic);
+        jw_key(w, "candidates");
+        jw_arr_open(w);
+        char rel[LINKV2_NAME_MAX];
+        for (int q = 0; q < linkv2_path_count(game, c); q++) {
+            if (linkv2_path_at(game, c, q, rel, sizeof(rel))) {
+                jw_str(w, rel);
+            }
+        }
+        jw_arr_close(w);
+        jw_obj_close(w);
+    }
+    jw_arr_close(w);
+}
 
 static int cmd_ping(job_ctx *job) {
     json_writer w;
@@ -72,10 +120,16 @@ static int cmd_games(job_ctx *job) {
             }
             jw_arr_close(&w);
         }
+        if (s->family == SCHEMA_FAMILY_LINKDATA_V2) {
+            write_linkv2_parts(&w, s);
+        }
         jw_key(&w, "containers");
         jw_arr_open(&w);
         for (int k = 0; k < s->container_count; k++) {
             jw_str(&w, s->containers[k]);
+        }
+        for (int k = 0; k < linkv2_container_count(s->game_id); k++) {
+            jw_str(&w, linkv2_container_at(s->game_id, k)->candidates[0]);
         }
         jw_arr_close(&w);
         jw_key(&w, "idx_files");
@@ -314,7 +368,6 @@ static int cmd_bottle(job_ctx *job, const json_value *req, err *e) {
     jw_kv_str(&w, "game", s->game_id);
     jw_kv_i64(&w, "entries", stats.entries);
     jw_kv_i64(&w, "payload_bytes", stats.payload_bytes);
-    jw_kv_i64(&w, "rebuilt_entries", stats.rebuilt_entries);
     jw_kv_i64(&w, "encrypted_entries", stats.encrypted_entries);
     jw_kv_i64(&w, "compressed_entries", stats.compressed_entries);
     jw_kv_i64(&w, "images", stats.images);

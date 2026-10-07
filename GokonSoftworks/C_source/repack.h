@@ -4,7 +4,6 @@
 #include "util.h"
 
 int repack_read_chunk(const char *file_path, buf *out, err *e);
-int repack_has_nested_folder(const char *file_path);
 int repack_from_folder(const char *folder, const unsigned char *original, size_t original_len,
                        buf *out, err *e);
 

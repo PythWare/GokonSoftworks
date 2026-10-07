@@ -8,6 +8,7 @@ from .wetworks import GokonSoftworksError, log, region_pair, wants_region_pair
 ALIGNMENT = 16
 HEADER_SLOT_OFF = 0
 HEADER_WIDTH = 16
+LINKDATA_V2_MAGICS = (0x00077DF9, 0x00011E54)
 
 class WriteError(GokonSoftworksError):
     pass
@@ -17,6 +18,56 @@ def part_for(game: dict, idx_marker: int) -> dict | None:
     if 0 <= idx_marker < len(parts):
         return parts[idx_marker]
     return None
+
+def has_candidates(part: dict | None) -> bool:
+    return part is not None and bool(part.get("candidates"))
+
+def read_linkdata_header(path: Path) -> tuple[int, int] | None:
+    try:
+        with path.open("rb") as handle:
+            raw = handle.read(HEADER_WIDTH)
+    except OSError:
+        return None
+    if len(raw) < HEADER_WIDTH:
+        return None
+    magic, count = struct.unpack_from("<II", raw)
+    return magic, count
+
+def resolve_candidate(game_dir: Path, part: dict) -> Path:
+    candidates = [game_dir / name for name in part["candidates"]]
+    present = [path for path in candidates if path.is_file()]
+    for path in present:
+        header = read_linkdata_header(path)
+        if header is not None and header[0] in LINKDATA_V2_MAGICS:
+            return path
+    return present[0] if present else candidates[0]
+
+def container_file(game: dict, game_dir, idx_marker: int, name: str) -> Path:
+    game_dir = Path(game_dir)
+    part = part_for(game, idx_marker)
+    if has_candidates(part):
+        return resolve_candidate(game_dir, part)
+    return game_dir / name
+
+def check_linkdata_target(recipe: Recipe, entry, part: dict, bin_path: Path):
+    if entry.container:
+        built = entry.container.replace("\\", "/").rsplit("/", 1)[-1]
+        if built.casefold() != bin_path.name.casefold():
+            raise WriteError(
+                f"{recipe.name} was built against {built} but this install has "
+                f"{bin_path.name} for that slot.\n\nThese are different regional versions "
+                "of the game. Their tables may not line up, so pouring it would corrupt "
+                "the container. Use a mod built for your region."
+            )
+    header = read_linkdata_header(bin_path)
+    if header is None or header[0] not in LINKDATA_V2_MAGICS:
+        raise WriteError(f"{bin_path.name} isnt a LINKDATA container.")
+    table_end = int(part.get("toc_offset", HEADER_WIDTH)) + header[1] * int(part["entry_size"])
+    if entry.entry_off >= table_end:
+        raise WriteError(
+            f"{recipe.name} points past the end of the {bin_path.name} table. "
+            "It was built for a different version of the game."
+        )
 
 def resolve_pair(game_dir: Path, bin_path: Path, idx_path: Path) -> tuple[Path, Path]:
     if bin_path.is_file() or not wants_region_pair(bin_path.name):
@@ -28,6 +79,9 @@ def resolve_pair(game_dir: Path, bin_path: Path, idx_path: Path) -> tuple[Path, 
 
 def container_for(game: dict, game_dir: Path, idx_marker: int) -> tuple[Path, Path]:
     part = part_for(game, idx_marker)
+    if has_candidates(part):
+        path = resolve_candidate(game_dir, part)
+        return path, path
     if part is not None:
         toc = part.get("toc") or part["container"]
         return resolve_pair(game_dir, game_dir / part["container"], game_dir / toc)
@@ -81,7 +135,7 @@ def pack_part_slot(part: dict, offset: int, size: int) -> bytes:
         )
     if alignment <= 0 or offset % alignment:
         raise WriteError(
-            f"A payload landed at {offset}, which is not a {alignment}-byte boundary."
+            f"A payload landed at {offset}, which isnt a {alignment} byte boundary."
         )
 
     values = {
@@ -147,7 +201,7 @@ def capture_container_sizes(game: dict, game_dir, tab: Tab) -> bool:
     if tab.measured():
         return False
     for idx_marker, name in enumerate(game.get("containers", [])):
-        path = game_dir / name
+        path = container_file(game, game_dir, idx_marker, name)
         if path.is_file():
             tab.remember_size(idx_marker, path.stat().st_size)
     if tab.container_sizes:
@@ -167,6 +221,8 @@ def apply_recipe(recipe: Recipe, game: dict, game_dir, tab: Tab, progress=None) 
         bin_path, idx_path = container_for(game, game_dir, entry.idx_marker)
         if not bin_path.is_file() or not idx_path.is_file():
             raise WriteError(f"Missing container {bin_path.name} or index {idx_path.name}.")
+        if has_candidates(part):
+            check_linkdata_target(recipe, entry, part, bin_path)
 
         payload = read_payload(recipe, index)
         width = int(part["entry_size"]) if part is not None else entry_size(game)
@@ -184,7 +240,7 @@ def apply_recipe(recipe: Recipe, game: dict, game_dir, tab: Tab, progress=None) 
                 handle.seek(entry.entry_off)
                 original = handle.read(width)
             if len(original) < width:
-                raise WriteError(f"{idx_path.name} is too small for slot {entry.entry_off}.")
+                raise WriteError(f"{idx_path.name} is too damn small for slot {entry.entry_off}.")
 
             with bin_path.open("r+b") as handle:
                 handle.seek(0, 2)

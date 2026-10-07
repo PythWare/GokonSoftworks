@@ -40,6 +40,8 @@ typedef struct {
 
 int codec_read_split_layout(const unsigned char *data, size_t len, arena *a, split_layout *out);
 int codec_looks_like_classic_split(const unsigned char *data, size_t len, arena *a);
+int codec_read_stored_layout(const unsigned char *data, size_t len, arena *a, split_layout *out);
+int codec_looks_like_stored_split(const unsigned char *data, size_t len, arena *a);
 int codec_looks_like_pairtable(const unsigned char *data, size_t len, arena *a);
 int codec_looks_like_split(const unsigned char *data, size_t len, arena *a);
 int codec_looks_like_empty_stub(const unsigned char *data, size_t len);

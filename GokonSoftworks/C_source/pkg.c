@@ -2,7 +2,6 @@
 #include "lzp2.h"
 #include "codec.h"
 #include "crypt.h"
-#include "repack.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,11 +62,14 @@ int pkg_bottle(job_ctx *job, const game_schema *s, int game_index, const char *o
     char (*digests)[65] = malloc(sizeof(char[65]) * count);
     int64_t *markers = (int64_t *)calloc(count, sizeof(int64_t));
     int64_t *offsets = (int64_t *)calloc(count, sizeof(int64_t));
-    if (payloads == NULL || digests == NULL || markers == NULL || offsets == NULL) {
+    const char **sources = (const char **)calloc(count, sizeof(const char *));
+    if (payloads == NULL || digests == NULL || markers == NULL || offsets == NULL ||
+        sources == NULL) {
         free(payloads);
         free(digests);
         free(markers);
         free(offsets);
+        free(sources);
         err_set(e, "out of memory staging %zu payloads", count);
         return 0;
     }
@@ -91,10 +93,8 @@ int pkg_bottle(job_ctx *job, const game_schema *s, int game_index, const char *o
         }
 
         buf_init(&payloads[i]);
-        if (repack_has_nested_folder(file_path)) {
-            stats->rebuilt_entries++;
-        }
-        if (!repack_read_chunk(file_path, &payloads[i], e)) {
+        if (!file_read_all(file_path, &payloads[i])) {
+            err_set(e, "couldnt read %s", file_path);
             ok = 0;
             break;
         }
@@ -126,6 +126,7 @@ int pkg_bottle(job_ctx *job, const game_schema *s, int game_index, const char *o
         sha256_bytes(payloads[i].data, payloads[i].len, digests[i]);
         markers[i] = idx_marker;
         offsets[i] = entry_off;
+        sources[i] = json_as_str(json_obj_get(entry, "container"), NULL);
         stats->payload_bytes += (int64_t)payloads[i].len;
         emit_progress(job, (int64_t)(i + 1), (int64_t)count, "bottling");
     }
@@ -219,6 +220,9 @@ int pkg_bottle(job_ctx *job, const game_schema *s, int game_index, const char *o
             jw_kv_i64(&header, "comp_marker", 0);
             jw_kv_i64(&header, "payload_size", (int64_t)payloads[i].len);
             jw_kv_str(&header, "payload_sha256", digests[i]);
+            if (sources[i] != NULL && sources[i][0] != 0) {
+                jw_kv_str(&header, "container", sources[i]);
+            }
             jw_obj_close(&header);
         }
         jw_arr_close(&header);
@@ -311,5 +315,6 @@ int pkg_bottle(job_ctx *job, const game_schema *s, int game_index, const char *o
     free(digests);
     free(markers);
     free(offsets);
+    free(sources);
     return ok;
 }

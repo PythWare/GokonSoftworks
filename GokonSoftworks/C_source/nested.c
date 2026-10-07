@@ -1,6 +1,7 @@
 #include "nested.h"
 #include "codec.h"
 #include "zp1.h"
+#include "btsc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -529,6 +530,21 @@ static int read_sequential_layout(const unsigned char *blob, size_t n, arena *a,
     return 1;
 }
 
+static int empty_slots_follow_data(const size_t *offs, const size_t *sizes, uint32_t count,
+                                   size_t table_end) {
+    size_t running_end = table_end;
+    for (uint32_t idx = 0; idx < count; idx++) {
+        if (sizes[idx] != 0) {
+            running_end = offs[idx] + sizes[idx];
+            continue;
+        }
+        if (offs[idx] != running_end) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static int read_pairtable_layout(const unsigned char *blob, size_t n, arena *a,
                                  sub_layout *out, int big) {
     if (n < 12) {
@@ -627,10 +643,11 @@ static int read_pairtable_layout(const unsigned char *blob, size_t n, arena *a,
             trailing_ok = 1;
         }
 
-        int tightly_packed = hits >= 1 && first_positive_meaningful &&
-                             first_off >= table_end && leading_gap <= 0x40 &&
-                             all_zero(blob, table_end, first_off) && contiguous && trailing_ok;
-        if (!tightly_packed) {
+        int packed = first_off >= table_end && leading_gap <= 0x40 &&
+                     all_zero(blob, table_end, first_off) && contiguous && trailing_ok;
+        int tightly_packed = packed && hits >= 1 && first_positive_meaningful;
+        int fully_tiled = packed && empty_slots_follow_data(offs, sizes, count, table_end);
+        if (!tightly_packed && !fully_tiled) {
             return 0;
         }
     }
@@ -1180,6 +1197,131 @@ static int read_offsets_layout(const unsigned char *blob, size_t len, arena *a,
     return 1;
 }
 
+static size_t align16(size_t value) {
+    return (value + 15) / 16 * 16;
+}
+
+static int all_ff(const unsigned char *blob, size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+        if (blob[i] != 0xFF) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int read_tiled_sizes_layout(const unsigned char *blob, size_t n, arena *a,
+                                   sub_layout *out, int big) {
+    if (n < 32) {
+        return 0;
+    }
+    uint32_t count = word_at(blob, 0, big);
+    if (count < 1 || count > NESTED_MAX_COUNT) {
+        return 0;
+    }
+    size_t table_end = 4 + (size_t)count * 4;
+    size_t data_start = align16(table_end);
+    if (data_start >= n || !all_zero(blob, table_end, data_start)) {
+        return 0;
+    }
+    size_t *sizes = (size_t *)arena_alloc(a, sizeof(size_t) * count);
+    if (sizes == NULL) {
+        return 0;
+    }
+    uint64_t total = 0;
+    size_t nonzero = 0;
+    int aligned = 1;
+    for (uint32_t i = 0; i < count; i++) {
+        sizes[i] = word_at(blob, 4 + (size_t)i * 4, big);
+        total += sizes[i];
+        if (sizes[i] != 0) {
+            nonzero++;
+        }
+        if (sizes[i] % 16 != 0) {
+            aligned = 0;
+        }
+    }
+    if (nonzero == 0 || (uint64_t)data_start + total > (uint64_t)n ||
+        align16(data_start + (size_t)total) != n ||
+        (!all_zero(blob, data_start + (size_t)total, n) && !all_ff(blob, data_start + (size_t)total, n))) {
+        return 0;
+    }
+    memset(out, 0, sizeof(*out));
+    out->kind = LAYOUT_SEQUENTIAL;
+    out->big_endian = big;
+    out->count = count;
+    out->seq_count = count;
+    out->seq_sizes = sizes;
+    out->table_end = table_end;
+    out->data_start = data_start;
+    out->child_align = aligned ? 16 : 0;
+    return 1;
+}
+
+static int read_tiled_offsets_layout(const unsigned char *blob, size_t n, arena *a,
+                                     sub_layout *out, int big) {
+    if (n < 32) {
+        return 0;
+    }
+    uint32_t count = word_at(blob, 0, big);
+    if (count < 1 || count > NESTED_MAX_COUNT) {
+        return 0;
+    }
+    size_t table_end = 4 + (size_t)count * 4;
+    size_t data_start = align16(table_end);
+    if (data_start >= n) {
+        return 0;
+    }
+    int ff_pad = data_start > table_end && all_ff(blob, table_end, data_start);
+    if (!ff_pad && !all_zero(blob, table_end, data_start)) {
+        return 0;
+    }
+    size_t *offsets = (size_t *)arena_alloc(a, sizeof(size_t) * count);
+    size_t *unique = (size_t *)arena_alloc(a, sizeof(size_t) * count);
+    if (offsets == NULL || unique == NULL) {
+        return 0;
+    }
+    size_t unique_count = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        offsets[i] = word_at(blob, 4 + (size_t)i * 4, big);
+        if (offsets[i] % 16 != 0 || offsets[i] >= n) {
+            return 0;
+        }
+        if (i == 0 ? offsets[i] != data_start : offsets[i] < offsets[i - 1]) {
+            return 0;
+        }
+        if (i > 0 && offsets[i] == offsets[i - 1]) {
+            if (!ff_pad) {
+                return 0;
+            }
+            continue;
+        }
+        unique[unique_count++] = offsets[i];
+    }
+    if (!ff_pad) {
+        int meaningful = 0;
+        for (size_t i = 0; i < unique_count && !meaningful; i++) {
+            size_t end = i + 1 < unique_count ? unique[i + 1] : n;
+            sub_layout child;
+            meaningful = nested_payload_looks_meaningful(blob + unique[i], end - unique[i], 0) ||
+                         read_tiled_sizes_layout(blob + unique[i], end - unique[i], a, &child, big);
+        }
+        if (!meaningful) {
+            return 0;
+        }
+    }
+    memset(out, 0, sizeof(*out));
+    out->kind = LAYOUT_OFFSETS;
+    out->big_endian = big;
+    out->count = count;
+    out->offs = offsets;
+    out->table_end = table_end;
+    out->unique_offsets = unique;
+    out->unique_count = unique_count;
+    out->child_align = 16;
+    return 1;
+}
+
 static int read_layouts(const unsigned char *blob, size_t len, arena *a,
                         sub_layout *out, int big) {
     if (read_wrapper_pair_layout(blob, len, a, out, big)) {
@@ -1191,10 +1333,16 @@ static int read_layouts(const unsigned char *blob, size_t len, arena *a,
     if (read_pairtable_layout(blob, len, a, out, big)) {
         return 1;
     }
+    if (read_tiled_sizes_layout(blob, len, a, out, big)) {
+        return 1;
+    }
     if (read_offsets_layout(blob, len, a, out, big)) {
         return 1;
     }
-    return read_sequential_layout(blob, len, a, out, big);
+    if (read_sequential_layout(blob, len, a, out, big)) {
+        return 1;
+    }
+    return read_tiled_offsets_layout(blob, len, a, out, big);
 }
 
 int nested_read_universal_layout(const unsigned char *blob, size_t len, arena *a, sub_layout *out) {
@@ -1550,11 +1698,13 @@ int nested_should_recurse(const char *ext, const unsigned char *chunk, size_t le
     if (ext != NULL) {
         if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".kvs") == 0 ||
             strcmp(ext, ".mdlk") == 0 || strcmp(ext, ".KSHL") == 0 ||
-            strcmp(ext, ".colk") == 0 || strcmp(ext, ".zp1") == 0) {
+            strcmp(ext, ".colk") == 0 || strcmp(ext, ".zp1") == 0 ||
+            strcmp(ext, ".cstb") == 0) {
             return 1;
         }
     }
     if (len >= 4 && (memcmp(chunk, "MDLK", 4) == 0 || memcmp(chunk, "LHSK", 4) == 0 ||
+                     memcmp(chunk, "BTSC", 4) == 0 ||
                      memcmp(chunk, "COLK", 4) == 0 || memcmp(chunk, "KOVS", 4) == 0 ||
                      memcmp(chunk, "zp1", 3) == 0)) {
         return 1;
@@ -1726,6 +1876,85 @@ static int unpack_zp1_blob(job_ctx *job, const unsigned char *blob, size_t n,
     const unsigned char *body = (const unsigned char *)plain.data;
     char name[40];
     snprintf(name, sizeof(name), "00000%s",
+             plain.len > 0 ? nested_resolve_payload_ext(body, plain.len) : ".bin");
+    write_child(job, out_dir, name, body, plain.len, 1, depth, written);
+    buf_free(&plain);
+    return 1;
+}
+
+size_t nested_kvs_bank_count(const unsigned char *blob, size_t n) {
+    if (n < NESTED_KVS_BANK_HEADER + 32) {
+        return 0;
+    }
+    int big = codec_big_endian();
+    size_t count = word_at(blob, 0, big);
+    if (count == 0 || count > NESTED_MAX_COUNT) {
+        return 0;
+    }
+    unsigned char fill = blob[8];
+    for (size_t i = 8; i < NESTED_KVS_BANK_HEADER; i++) {
+        if (blob[i] != fill) {
+            return 0;
+        }
+    }
+    size_t pos = NESTED_KVS_BANK_HEADER;
+    for (size_t i = 0; i < count; i++) {
+        if (pos + 32 > n || memcmp(blob + pos, "KOVS", 4) != 0) {
+            return 0;
+        }
+        size_t end = pos + 32 + (size_t)word_at(blob, pos + 4, big);
+        size_t next = (end + NESTED_KVS_BANK_HEADER - 1) / NESTED_KVS_BANK_HEADER * NESTED_KVS_BANK_HEADER;
+        if (end > n || next > n) {
+            return 0;
+        }
+        for (size_t k = end; k < next; k++) {
+            if (blob[k] != fill) {
+                return 0;
+            }
+        }
+        pos = next;
+    }
+    return pos == n ? count : 0;
+}
+
+static int unpack_kvs_bank_blob(job_ctx *job, const unsigned char *blob, size_t n,
+                                const char *out_dir, int depth, int64_t *written) {
+    size_t count = nested_kvs_bank_count(blob, n);
+    if (count == 0 || !path_make_dirs(out_dir)) {
+        return 0;
+    }
+    int big = codec_big_endian();
+    size_t pos = NESTED_KVS_BANK_HEADER;
+    for (size_t i = 0; i < count; i++) {
+        size_t size = 32 + (size_t)word_at(blob, pos + 4, big);
+        char name[40];
+        snprintf(name, sizeof(name), "%05zu.kvs", i);
+        write_child(job, out_dir, name, blob + pos, size, 0, depth, written);
+        pos = (pos + size + NESTED_KVS_BANK_HEADER - 1) / NESTED_KVS_BANK_HEADER * NESTED_KVS_BANK_HEADER;
+    }
+    return 1;
+}
+
+static int unpack_cstb_blob(job_ctx *job, const unsigned char *blob, size_t n,
+                            const char *out_dir, int depth, int64_t *written) {
+    if (!btsc_looks_like(blob, n)) {
+        return 0;
+    }
+    buf plain;
+    buf_init(&plain);
+    err quiet;
+    err_clear(&quiet);
+    if (!btsc_decompress(blob, n, &plain, &quiet)) {
+        buf_free(&plain);
+        return 0;
+    }
+    if (!path_make_dirs(out_dir)) {
+        buf_free(&plain);
+        return 0;
+    }
+    const unsigned char *body = (const unsigned char *)plain.data;
+    char name[40];
+    snprintf(name, sizeof(name), "000%s",
              plain.len > 0 ? nested_resolve_payload_ext(body, plain.len) : ".bin");
     write_child(job, out_dir, name, body, plain.len, 1, depth, written);
     buf_free(&plain);
@@ -1950,7 +2179,7 @@ static int unpack_classic_split_resource(job_ctx *job, const char *path, const u
                                          size_t n, int depth, int64_t *written) {
     arena a;
     arena_init(&a);
-    if (!codec_looks_like_classic_split(blob, n, &a)) {
+    if (!codec_looks_like_classic_split(blob, n, &a) && !codec_looks_like_stored_split(blob, n, &a)) {
         arena_free(&a);
         return 0;
     }
@@ -2169,6 +2398,10 @@ int nested_unpack_resource(job_ctx *job, const char *path, const unsigned char *
 
     int ok = 0;
     if (unpack_zp1_blob(job, blob, len, out_dir, depth, written)) {
+        ok = 1;
+    } else if (unpack_cstb_blob(job, blob, len, out_dir, depth, written)) {
+        ok = 1;
+    } else if (unpack_kvs_bank_blob(job, blob, len, out_dir, depth, written)) {
         ok = 1;
     } else if (unpack_colk_blob(job, blob, len, out_dir, depth, written)) {
         ok = 1;
