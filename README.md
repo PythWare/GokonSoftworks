@@ -2,35 +2,27 @@
 
 More games are planned to be supported. For example, Dead or Alive games ate planned for modding support (specifically DOA 5 and older games since Team Ninja is still working on DOA 6). I've looked into the formats Team Ninja and Gust uses. Regarding Gust, Atelier games are planned for modding support in GokonSoftworks. I want GokonSoftworks to be the true foundation of all Koei Tecmo PC games for modding.
 
-Also, the next update of GokonSoftworks will resolve an issue I was informed of. Some subcontainers have evaded detection for DW8E during the unpacking phase, meaning some subs are not unpacked and retain the .bin extension. So, the next update will add the variations of the signatureless subcontainers I missed. Do be aware that that will make DW8E unpack with even more files than it currently does.
-
-Further, I may fully convert GokonSoftworks to C. Atm the majority of the toolkit is written in C, with some Python. I can recreate the GUI in C. The real benefit of GokonSoftworks going full C is that it removes Python and Pillow as requirements to use the toolkit, you'd pretty much just download a standalone executable if I go full C, 0 dependencies while still retaining my rad GUI designs.
+Further, I may fully convert GokonSoftworks to C. Atm the majority of the toolkit is written in C, with some Python. I can recreate the GUI in C. The real benefit of GokonSoftworks going full C is that it removes Python and Pillow as requirements to use the software, you'd pretty much just download a standalone executable if I go full C, 0 dependencies while still retaining my rad GUI designs.
 
 Lastly, the RDB and fdata formats newer Koei Tecmo games use will be supported by GokonSoftworks. Due to the scale of that, it will take a few montha to fully complete GokonSoftworks' new overhaul since RDB and fdata are vastly different from LINKDATA v1 and v2.
 
-# Version 3.0 info
-
-Version 3.0 is very different from previous versions. it's something i've worked on separately for months (mainly rewriting the heavy logic in C, that was time consuming). Aldnoah Engine is now GokonSoftworks. It has new code (Python and C), new GUI, new mod manager, etc. Scroll to release notes for more details and for GUI example images of the toolkit
-
-Modders that use GokonSoftworks, make sure to read the Compatible Mods section of this readme as it briefly explains what to tell your users which version of GokonSoftworks they'll need for the Mod Manager
-
 # GokonSoftworks
 
-Formerly Aldnoah Engine, GokonSoftworks is a Koei Tecmo  modding toolkit for Omega Force games (soon Team Ninja and Gust games as well)
+Formerly Aldnoah Engine, GokonSoftworks is modding software for games developed by Omega Force (soon Team Ninja and Gust games as well)
 
-GokonSoftworks is meant to be the foundation for modding the Koei Tecmo games it supports. It can unpack game containers, decompress assets, preserve rebuild metadata, rebuild subcontainers, create mod files, apply mods, disable mods, merge mods, encrypt/decrypt files that rely on encryption, etc. GokonSoftworks also has a rad design, it's not enough for software to be useful, i want using GokonSoftworks to feel like an experience as well. More tools will be made for GokonSoftworks as time goes on.
+GokonSoftworks is meant to be the foundation for modding the Koei Tecmo games it supports. It can unpack game containers, decompress assets, preserve rebuild metadata, rebuild subcontainers, create mod files, apply mods, disable mods, merge mods, encrypt/decrypt files that rely on encryption, etc.
 
 You don't need games unpacked if your only goal is to apply/disable mods (you just need to click the Generate Taildata JSON button one time), game unpacking is an optional feature for those who want to mod the files.
 
-I HIGHLY recommend reading this readme, GokonSoftworks_Guide.txt (detailed guide on GokonSoftworks usage since the readme is getting a little long), and Aldnoah_Installer_Rules_Guide.txt (if you intend to make Aldnoah installer mods with Aldnoah Engine 2.025 or older versions). the C_Source folder is the source files for gokonsoftworks.exe to show the exe is safe, that executable is to be used by the toolkit, not you. Python owns the GUI while C handles the heavy logic, you as the end user only use main.pyw to use the toolkit
+I HIGHLY recommend reading this readme, GokonSoftworks_Guide.txt (detailed guide on GokonSoftworks usage since the readme is getting a little long), and Aldnoah_Installer_Rules_Guide.txt (if you intend to make Aldnoah installer mods with Aldnoah Engine 2.025 or older versions). the C_Source folder is the source files for gokonsoftworks.exe to show the exe is safe, you as the end user only use main.pyw to use the software.
 
-GokonSoftworks is inspired by my favorite anime "How I Attended An All-Guy's Mixer", the former toolkit Aldnoah Engine was inspired by Aldnoah.Zero
+GokonSoftworks is inspired by my favorite anime "How I Attended An All-Guy's Mixer", the former software Aldnoah Engine was inspired by Aldnoah.Zero
 
 # Requirements
 
 ## Required
 
-- Windows PC. GokonSoftworks isn't supported on Linux/Mac.
+- Windows PC. GokonSoftworks isn't supported on Linux/Mac. Though you might be able to get it to work with wine on linux
 - Python 3.
 - Pillow.
 
@@ -57,6 +49,9 @@ Back up your game files before using GokonSoftworks.
 # Supported Games
 
 Currently supported PC games:
+- Attack On Titan 1
+- Attack On Titan 2
+- One Piece Pirate Warriors 3
 - Samurai Warriors 2
 - Dynasty Warriors 4 Hyper
 - Dynasty Warriors 6
@@ -74,13 +69,9 @@ Currently supported PC games:
 Currently supported PS3 games (MUST be decrypted before use with GokonSoftworks):
 - Dynasty Warriors 6 Empires
 
-# Release Notes of GokonSoftworks 3.0
+# Release Notes of GokonSoftworks 3.02
 
-Aldnoah Engine is changed to GokonSoftworks, this is more than a name change. Most of the toolkit has had major code changes, GUI redesign, etc. Even the Constellation Mod Manager is changed to a new Mod Manager that's eaiser to use (some gamers told me Constellation Manager was too complex). Unpacking games is way faster than before now that I rewrote the bulk of the file handling logic in C (I manage my own damn pointers).
-
-The other changes in 3.0 are games that have intact filenames (check Intact Filenames section for more info) will now unpack with the original filenames instead of entry_number.bin when feasible, the Mod Manager is heavily optimized (fully capable of handling thousands of mods), a single mod format (.Gokon), etc
-
-Oh and new games are added as supported (Dynasty Warriors 4 Hyper, Dynasty Warriors 6, Warriors Orochi 1, Samurai Warriors 2, Dynasty Warriors 6 Empires)
+3.02 is a big update. It includes the linkdata v2 format (what my Katsuki Engine previously handled), adds new games as supported, and changes the subcontainer code. Subcontainers shouldn't evade detection anymore during unpacking. RDB and Fdata will take a few more months to fully support (probably supported by GokonSoftworks 3.07)
 
 # Main Hub
 
@@ -88,13 +79,13 @@ The Main Hub of GokonSoftworks, I suggest running Diagnostics if it's your first
 
 Click the dots in the Menu to navigate the supported games. When a game unpacks the Mocktail glass will fill based on the unpack progress, when it says "poured" the game is done unpacking.
 
-<img width="1120" height="922" alt="1" src="https://github.com/user-attachments/assets/d56129b7-be98-4fcc-9644-841d75d36f15" />
+<img width="1121" height="922" alt="g2" src="https://github.com/user-attachments/assets/5af445aa-7f37-439b-8c0c-62198aff99ee" />
 
-<img width="1120" height="926" alt="2" src="https://github.com/user-attachments/assets/eec4d7f9-e488-4606-bb27-873062cc833f" />
+<img width="1120" height="932" alt="g1" src="https://github.com/user-attachments/assets/254d4734-b1bd-4004-8cac-de07ce79b506" />
 
-<img width="1122" height="926" alt="3" src="https://github.com/user-attachments/assets/5a5f7072-24b4-4dbd-9ec7-5a4045766070" />
+<img width="1120" height="910" alt="g3" src="https://github.com/user-attachments/assets/28bc6675-1b44-4178-82ba-05489311711b" />
 
-<img width="1121" height="924" alt="4" src="https://github.com/user-attachments/assets/9f2f7fe4-31f1-44af-8dbe-a33b5ea0c9dc" />
+<img width="1121" height="927" alt="g4" src="https://github.com/user-attachments/assets/bd153479-47eb-41f6-8be7-f67299925751" />
 
 # Mod Creator
 
@@ -131,7 +122,6 @@ It understands GokonSoftworks's taildata system. Mods can be applied without reb
 
 ## What makes it different
 
-- **Container-aware modding**, applies mods directly to Koei Tecmo container/IDX structures.
 - **No same-size requirement**, replacement files can be larger/smaller than the originals.
 - **No forced recompression**, GokonSoftworks can apply decompressed replacement payloads when the game accepts them.
 - **Safe disable support**, original IDX entries are saved in a ledger and restored when disabling mods.
@@ -163,7 +153,7 @@ Some games made by Omega Force retain the original filenames but not all of them
 
 Games that retain most or all of the original filenames:
 
-Samurai Warriors 2, Dynasty Warriors 4 Hyper, Dynasty Warriors 6, Warriors Orochi 1, Bladestorm Nightmare.
+Attack On Titan 1, Attack On Titan 2, Samurai Warriors 2, Dynasty Warriors 4 Hyper, Dynasty Warriors 6, Warriors Orochi 1, Bladestorm Nightmare.
 
 Games that retain most or all of the original filenames but the order of the filenames is not fully solved yet:
 
@@ -171,7 +161,7 @@ Dynasty Warriors 6 Empires and Dynasty Warriors 7 XL. I have figured out a large
 
 Games that don't retain most or any of the original filenames on PC:
 
-Dynasty Warriors 8 XL, Dynasty Warriors 8 Empires, Dynasty Warriors 9, Warriors All Stars, Warriors Orochi 3, Warriors Orochi 4, Dragon Quest Builders 2
+Dynasty Warriors 8 XL, Dynasty Warriors 8 Empires, Dynasty Warriors 9, Warriors All Stars, Warriors Orochi 3, Warriors Orochi 4, Dragon Quest Builders 2, One Piece Pirate Warriors 3
 
 # Compatible Mods
 
@@ -331,7 +321,7 @@ Unpacking can take several minutes or longer depending on:
 
 If the mocktail appears stuck, it isn't. It may still be working through heavy subcontainer/decompression logic.
 
-For best results, unpack to a SSD.
+For best results, unpack to a SSD and set the folder to be excluded from windows defender because unpacks of these games tend to be 200k+ files and windows defender slows it down.
 
 # Current known limitations
 
@@ -344,6 +334,8 @@ Credit goes to Kanbei and Zebuta for allowing me to include their txt file docum
 Credit also goes to default.kramer for gifting me Dragon Quest Builders 2, without their contribution I probably wouldn't have looked into supporting DQB2.
 
 Credit goes to sapphire and playinful for informing me of DQB2 using encryption, their sample files helped me solve the encryption used for DQB2
+
+Credit goes to LordValencia and Mr Axiom Opera for gifting me OP3.
 
 # Extra Notes
 
