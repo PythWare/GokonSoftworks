@@ -1,6 +1,6 @@
 Guide on using GokonSoftworks
 
-This guide will explain using GokonSoftworks in sections but make sure to still read the readme file, the readme already explains what's needed to use it (python and pillow).
+This guide will explain using GokonSoftworks in sections but make sure to still read the readme file, the readme already explains what's needed to use it (the executable).
 
 User (non-modding) Section:
 
