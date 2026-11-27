@@ -4,11 +4,17 @@ This guide will explain using GokonSoftworks in sections but make sure to still 
 
 User (non-modding) Section:
 
-You don't need the games unpacked to use the toolkit unless you want to mod the files yourself, if all you want to do is apply/disable mods then you don't need to unpack any game. Unpacking is merely an optional feature for modders who want to dig into the files.
+You don't need the games unpacked to use the software unless you want to mod the files yourself or you downloaded a non-gokon mod.
+
+User (non-modding) Section for Gokon mods:
 
 If you just want to play with mods you only need to click Generate Taildata JSON, wait for it to finish, place your mods in the Mods folder, Open Mod Manager when taildata json is made, and then use the Mod Manager.
 
 Before you apply/disable mods, make sure to set the install folder of the game you're using mods with using the Set Game Folder button. An example for SW2 in my case would be C:\sw2
+
+User (non-modding) Section for non-gokon mods:
+
+A few of the games GS supports don't use gokon for mods (DW6, DW6E, WOZ, and some containers for a few other games). To apply a mod you downloaded (assuming it's a zip mod), you unpack the game for the mod (DW6, DW6E, WOZ, etc cases that don't use gokon mods), extract the zip to the unpacked folder, then click Rebuild Containers button. That will then apply the mods. For more details on why some games won't use gokon mods, review in the readme the section "Rebuild Containers Info"
 
 Modder Section:
 
@@ -32,6 +38,10 @@ From GokonSoftworks versions 2.024 onward, taildata is only assigned to the exte
 Rebuild Containers Info:
 
 I already explain this in the readme so make sure to read that. The quicky is some games made by Omega Force don't use offset fields in the TOCS so to apply mods to containers that don't have IDX files you use Rebuild Containers button. That's an issue with the container, not my Mod Manager
+
+Modders making mods for non-gokon supported games:
+
+Since games like DW6E, DW6, and WOZ lack offset fields to update, .gokon mods arent suitable for them. So to ship your mods for said games that don't use .gokon, just zip up your modded files and keep the folder hierarchy. That way your users can download the zip, unpack the game, extract zip to the unpacked folder, and then rebuild with Rebuild Containers button.
 
 Possible Issues:
 
