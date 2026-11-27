@@ -1,10 +1,12 @@
 # The future of GokonSoftworks, supporting Team Ninja and Gust games for modding as well as RDB/fdata formats
 
-More games are planned to be supported. For example, Dead or Alive games ate planned for modding support (specifically DOA 5 and older games since Team Ninja is still working on DOA 6). I've looked into the formats Team Ninja and Gust uses. Regarding Gust, Atelier games are planned for modding support in GokonSoftworks. I want GokonSoftworks to be the true foundation of all Koei Tecmo PC games for modding.
+More games are planned to be supported. For example, Dead or Alive games are planned for modding support (specifically DOA 5 and older games since Team Ninja is still working on DOA 6). I've looked into the formats Team Ninja and Gust uses. Regarding Gust, Atelier games are planned for modding support in GokonSoftworks. I want GokonSoftworks to be the true foundation of all Koei Tecmo PC games for modding.
 
-Further, I may fully convert GokonSoftworks to C. Atm the majority of the toolkit is written in C, with some Python. I can recreate the GUI in C. The real benefit of GokonSoftworks going full C is that it removes Python and Pillow as requirements to use the software, you'd pretty much just download a standalone executable if I go full C, 0 dependencies while still retaining my rad GUI designs.
+Lastly, the RDB and fdata formats newer Koei Tecmo games use will be supported by GokonSoftworks. Due to the scale of that, it will take a few months to fully complete GokonSoftworks' new overhaul since RDB and fdata are vastly different from LINKDATA v1 and v2.
 
-Lastly, the RDB and fdata formats newer Koei Tecmo games use will be supported by GokonSoftworks. Due to the scale of that, it will take a few montha to fully complete GokonSoftworks' new overhaul since RDB and fdata are vastly different from LINKDATA v1 and v2.
+# Release Notes of GokonSoftworks 3.03
+
+I have fully abandoned Python for GokonSoftworks, the software is now powered entirely in C. There are no dependencies, just download from releases and use the executable. Later on I will release the C and Dart versions of my Kybernes Tools, going forward my software will have no dependecies which means abandoning python.
 
 # GokonSoftworks
 
@@ -12,9 +14,9 @@ Formerly Aldnoah Engine, GokonSoftworks is modding software for games developed 
 
 GokonSoftworks is meant to be the foundation for modding the Koei Tecmo games it supports. It can unpack game containers, decompress assets, preserve rebuild metadata, rebuild subcontainers, create mod files, apply mods, disable mods, merge mods, encrypt/decrypt files that rely on encryption, etc.
 
-You don't need games unpacked if your only goal is to apply/disable mods (you just need to click the Generate Taildata JSON button one time), game unpacking is an optional feature for those who want to mod the files.
+You don't need games unpacked if your only goal is to apply/disable Gokon mods (you just need to click the Generate Taildata JSON button one time), game unpacking is an optional feature for those who want to mod the files. The only times unpacking is needed is for a few games where .Gokon mods aren't viable (read "Rebuild Containers Info" section for more details)
 
-I HIGHLY recommend reading this readme, GokonSoftworks_Guide.txt (detailed guide on GokonSoftworks usage since the readme is getting a little long), and Aldnoah_Installer_Rules_Guide.txt (if you intend to make Aldnoah installer mods with Aldnoah Engine 2.025 or older versions). the C_Source folder is the source files for gokonsoftworks.exe to show the exe is safe, you as the end user only use main.pyw to use the software.
+I HIGHLY recommend reading this readme, GokonSoftworks_Guide.txt (detailed guide on GokonSoftworks usage since the readme is getting a little long), and Aldnoah_Installer_Rules_Guide.txt (if you intend to make Aldnoah installer mods with Aldnoah Engine 2.025 or older versions). the C_Source folder is the source files for gokonsoftworks.exe to show the exe is safe, you as the end user only use gokonsoftworks.exe to use the software.
 
 GokonSoftworks is inspired by my favorite anime "How I Attended An All-Guy's Mixer", the former software Aldnoah Engine was inspired by Aldnoah.Zero
 
@@ -23,26 +25,9 @@ GokonSoftworks is inspired by my favorite anime "How I Attended An All-Guy's Mix
 ## Required
 
 - Windows PC. GokonSoftworks isn't supported on Linux/Mac. Though you might be able to get it to work with wine on linux
-- Python 3.
-- Pillow.
-
-Install Pillow with:
-
-```
-python -m pip install pillow
-```
 
 # How to Launch
-
-Launch the GUI with:
-
-```text
-main.pyw
-```
-
-You can double click `main.pyw` or run it from command prompt.
-
-If GokonSoftworks doesn't launch it's usually caused by Python installed incorrectly, Pillow missing, or .pyw file associations using the wrong Python. Please verify your Python installation before reporting an GokonSoftworks bug.
+Double click the executable gokonsoftworks.exe
 
 Back up your game files before using GokonSoftworks.
 
@@ -60,6 +45,7 @@ Currently supported PC games:
 - Dynasty Warriors 8 Empires
 - Dynasty Warriors 9
 - Warriors Orochi 1
+- Warriors Orochi Z
 - Warriors Orochi 3
 - Warriors Orochi 4
 - Bladestorm Nightmare
@@ -153,7 +139,7 @@ Some games made by Omega Force retain the original filenames but not all of them
 
 Games that retain most or all of the original filenames:
 
-Attack On Titan 1, Attack On Titan 2, Samurai Warriors 2, Dynasty Warriors 4 Hyper, Dynasty Warriors 6, Warriors Orochi 1, Bladestorm Nightmare.
+Attack On Titan 1, Attack On Titan 2, Samurai Warriors 2, Dynasty Warriors 4 Hyper, Dynasty Warriors 6, Warriors Orochi Z, Warriors Orochi 1, Bladestorm Nightmare.
 
 Games that retain most or all of the original filenames but the order of the filenames is not fully solved yet:
 
@@ -173,9 +159,13 @@ GokonSoftworks 2.025 supports v2, v3, and v4 for mod formats. If you're not sure
 
 # Rebuild Containers Info
 
-Some games have rebuild only supported containers because said containers have no offset field to repoint, that's just how Omega Force designed some containers. Either the table stores lengths and each entry follows the one before it (DW6 and DW6E) or there's no table and entries are found by scanning (BGM and voice containers). This means if you mod files from a container not supported by the Mod Manager (the files will be listed  below), you just need to use the Rebuild Containers button. Again, this isn't my fault it's just how some of the containers Omega Force designed work which makes it more optimal to rebuild the container than to force the Mod Manager to handle rebuilding.
+Some games have rebuild only supported containers because said containers have no offset field to repoint, that's just how Omega Force designed some containers. Either the table stores lengths and each entry follows the one before it (DW6, DW6E, WOZ) or there's no table and entries are found by scanning (BGM and voice containers). This means if you mod files from a container not supported by the Mod Manager (the files will be listed  below), you just need to use the Rebuild Containers button. Again, this isn't my fault it's just how some of the containers Omega Force designed work which makes it more optimal to rebuild the container than to force the Mod Manager to handle rebuilding.
 
 The list of games and files that need to use the Rebuild Containers button:
+
+Warriors Orochi Z:
+
+LINKDATA1.BIN, LINKDATA2.BIN, LINKDATA3.BIN, Voice.bin
 
 Dynasty Warriors 6:
 
@@ -202,7 +192,7 @@ Warriors Orochi 2 of its 7 containers (the other 5 are supported by the mod mana
 data\LINK_BGM.BDX
 data\LINK_SEBANK.BDX + LINK_SEBANK.HDX
 
-# Aldnoah Merger (only in Aldnoah Engine 2.025, GokonSoftworks 3.02 will include its own deluxe Mod Merger)
+# Aldnoah Merger (only in Aldnoah Engine 2.025, GokonSoftworks 3.05 will include its own deluxe Mod Merger)
 
 As explained above, this handles merging of mods. Suppose mod 1 and mod 2 edit the same files, without merging, the last applied mod would overwrite the other mod. Now, you can use Aldnoah Merger to merge mods that mod the same files. This allows modders to merge mods that contain the same files in them.
 
@@ -309,9 +299,9 @@ That isn't an GokonSoftworks error, it may be a mistake that happened during the
 
 # Performance Notes
 
-Some games unpack very large numbers of files. That's normal especially when deep subcontainer unpacking is enabled.
+Some games unpack very large numbers of files. That's normal especially when deep subcontainer unpacking.
 
-Unpacking can take several minutes or longer depending on:
+Unpacking can take several minutes or longer or perhaps less depending on:
 
 - game size,
 - number of container entries,
@@ -339,7 +329,7 @@ Credit goes to LordValencia and Mr Axiom Opera for gifting me OP3.
 
 # Extra Notes
 
-If you encounter issues or have questions contact me through GitHub, Reddit, or Discord but please make sure you read the readme, GokonSoftworks_Guide.txt, and Aldnoah_Installer_Rules_Guide.txt first since those answer a lot of questions already.
+If you encounter issues or have questions contact me through GitHub, Reddit, or Discord but please make sure you read the readme and GokonSoftworks_Guide.txt first since those answer a lot of questions already.
 
 If Koei Tecmo has any issue with GokonSoftworks/Aldnoah Engine, please contact me so I can comply. GokonSoftworks is intended for modding offline games so players and modders can keep enjoying them long after official support ends.
 
